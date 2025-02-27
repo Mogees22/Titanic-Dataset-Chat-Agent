@@ -16,7 +16,7 @@ question = st.text_input("Enter your question:")
 
 if st.button("Ask"): 
     if question:
-        response = requests.post("http://127.0.0.1:8000/query", json={"question": question})
+        response = requests.post("https://titanic-dataset-chat-agent-2ad3.onrender.com", json={"question": question})
         if response.status_code == 200:
             answer = response.json()["answer"]
             st.write("**Answer:**", answer)
