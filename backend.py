@@ -28,6 +28,10 @@ except Exception as e:
 class QueryRequest(BaseModel):
     question: str
 
+def is_dataset_query(question):
+    keywords = ["average ticket fare", "survival rate", "total passengers", "fare", "age", "class"]
+    return any(keyword in question.lower() for keyword in keywords)
+
 def process_query(question):
     try:
         # Handle dataset-related questions
