@@ -30,6 +30,20 @@ class QueryRequest(BaseModel):
 
 def process_query(question):
     try:
+        # Handle dataset-related questions
+        if is_dataset_query(question):
+            if "average ticket fare" in question.lower():
+                avg_fare = df["Fare"].mean()
+                return f"The average ticket fare was ${avg_fare:.2f}."
+            elif "survival rate" in question.lower():
+                survival_rate = df["Survived"].mean() * 100
+                return f"The survival rate was {survival_rate:.2f}%."
+            elif "total passengers" in question.lower():
+                total_passengers = len(df)
+                return f"The total number of passengers was {total_passengers}."
+            else:
+                return "I couldn't find relevant data in the dataset."
+        # Otherwise, use Gemini for general questions
         url = f"https://generativelanguage.googleapis.com/v1/models/{model_name}:generateContent"
         headers = {"Content-Type": "application/json"}
         params = {"key": api_key}
