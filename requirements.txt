@@ -1,7 +1,10 @@
 streamlit
 matplotlib
 pandas  
-numpy  
+numpy 
+requests
 seaborn
 fastapi
 uvicorn
+langchain
+openai
