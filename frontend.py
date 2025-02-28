@@ -15,6 +15,7 @@ app = FastAPI()
 df = pd.read_csv("titanic.csv")
 
 # Retrieve API key from environment variable
+print("API Key:", os.getenv("GOOGLE_GEMINI_API_KEY"))
 api_key = os.getenv("GOOGLE_GEMINI_API_KEY")
 
 if not api_key:
