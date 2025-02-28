@@ -3,6 +3,9 @@ import requests
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
+import base64
+import io
+from PIL import Image
 
 # Streamlit UI Setup
 st.title("Titanic Chat Agent 🚢")
@@ -17,20 +20,30 @@ question = st.text_input("Enter your question:")
 if st.button("Ask"): 
     if question:
         response = requests.post("https://titanic-dataset-chat-agent-2ad3.onrender.com/query", json={"question": question})
+        
         if response.status_code == 200:
-            answer = response.json()["answer"]
-            st.write("**Answer:**", answer)
+            response_data = response.json()
             
-            # Example: Show histogram if user asks for age distribution
-            if "histogram of passenger ages" in question.lower():
+            if "answer" in response_data:
+                answer = response_data["answer"]
+                st.write("**Answer:**", answer)
+            
+            # Handle base64-encoded images from API response
+            if "image" in response_data:
+                image_data = response_data["image"]  # Extract base64 string
+                image_bytes = base64.b64decode(image_data)  # Decode
+                image = Image.open(io.BytesIO(image_bytes))  # Convert to PIL Image
+                st.image(image, caption="Generated Visualization")  # Display in Streamlit
+                
+            # Local visualizations
+            elif "histogram of passenger ages" in question.lower():
                 plt.figure(figsize=(8,5))
                 plt.hist(df['Age'].dropna(), bins=20, edgecolor='black')
                 plt.xlabel("Age")
                 plt.ylabel("Number of Passengers")
                 plt.title("Age Distribution of Titanic Passengers")
                 st.pyplot(plt)
-            
-            # Show bar chart for embarked passengers
+                
             elif "how many passengers embarked from each port" in question.lower():
                 plt.figure(figsize=(8,5))
                 sns.countplot(x=df['Embarked'], palette='viridis')
@@ -38,16 +51,14 @@ if st.button("Ask"):
                 plt.ylabel("Passenger Count")
                 plt.title("Number of Passengers by Embarkation Port")
                 st.pyplot(plt)
-            
-            # Show pie chart for gender distribution
+                
             elif "percentage of passengers were male" in question.lower():
                 gender_counts = df['Sex'].value_counts()
                 plt.figure(figsize=(6,6))
                 plt.pie(gender_counts, labels=gender_counts.index, autopct='%1.1f%%', colors=['lightblue', 'pink'])
                 plt.title("Male vs Female Passenger Distribution")
                 st.pyplot(plt)
-            
-            # Show boxplot for fare distribution
+                
             elif "average ticket fare" in question.lower():
                 plt.figure(figsize=(8,5))
                 sns.boxplot(x=df['Fare'], color='blue')
