@@ -36,6 +36,8 @@ def process_query(question):
     try:
         # Handle dataset-related questions
         if is_dataset_query(question):
+            question_lower = question.lower()
+            
             if "average ticket fare" in question.lower():
                 avg_fare = df["Fare"].mean()
                 return f"The average ticket fare was ${avg_fare:.2f}."
