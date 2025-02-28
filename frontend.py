@@ -1,116 +1,58 @@
-from fastapi import FastAPI, HTTPException
-import google.generativeai as genai
-import pandas as pd
+import streamlit as st
+import requests
 import matplotlib.pyplot as plt
 import seaborn as sns
-import io
-import base64
-from pydantic import BaseModel
-import os
-import requests
-import streamlit as st
-from dotenv import load_dotenv
+import pandas as pd
 
-app = FastAPI()
+# Streamlit UI Setup
+st.title("Titanic Chat Agent 🚢")
+st.write("Ask a question about the Titanic dataset!")
 
-# Load the Titanic dataset
+# Load dataset
 df = pd.read_csv("titanic.csv")
 
-# Load environment variables
-load_dotenv()
+# User input
+question = st.text_input("Enter your question:")
 
-# Retrieve API key from Streamlit secrets or fallback to environment variable
-api_key = st.secrets.get("GOOGLE_GEMINI_API_KEY", os.getenv("GOOGLE_GEMINI_API_KEY"))
-
-if not api_key:
-    st.error("Google Gemini API key is missing. Please set it in Streamlit Secrets or environment variables.")
-else:
-    st.success("API Key Loaded Successfully!")
-
-# Configure Gemini model with a correct model name
-try:
-    model_name = "gemini-1.5-pro"
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(model_name)
-except Exception as e:
-    raise HTTPException(status_code=500, detail=f"Model Initialization Error: {str(e)}")
-
-# Define request model
-class QueryRequest(BaseModel):
-    question: str
-
-def is_dataset_query(question: str):
-    dataset_keywords = ["average fare", "percentage of passengers", "histogram", "survival rate", "distribution"]
-    return any(keyword in question.lower() for keyword in dataset_keywords)
-
-def process_dataset_query(question: str):
-    if "average fare" in question.lower():
-        return f"The average fare was ${df['Fare'].mean():.2f}."
-    elif "percentage of passengers" in question.lower() and "male" in question.lower():
-        male_percentage = (df[df['Sex'] == 'male'].shape[0] / df.shape[0]) * 100
-        return f"The percentage of male passengers was {male_percentage:.2f}%."
-    elif "histogram" in question.lower() and "age" in question.lower():
-        plt.figure(figsize=(8, 6))
-        sns.histplot(df['Age'].dropna(), bins=20, kde=True)
-        plt.xlabel("Age")
-        plt.ylabel("Number of Passengers")
-        plt.title("Age Distribution of Titanic Passengers")
-        
-        buf = io.BytesIO()
-        plt.savefig(buf, format="png")
-        buf.seek(0)
-        img_base64 = base64.b64encode(buf.read()).decode("utf-8")
-        return {"image": img_base64}
-    
-    return "Query not recognized."
-
-def process_query(question):
-    try:
-        if is_dataset_query(question):
-            return process_dataset_query(question)
-        
-        url = f"https://generativelanguage.googleapis.com/v1/models/{model_name}:generateContent"
-        headers = {"Content-Type": "application/json"}
-        params = {"key": api_key}
-        data = {"contents": [{"parts": [{"text": question}]}]}
-
-        response = requests.post(url, headers=headers, params=params, json=data)
-        response_json = response.json()
-
-        # Debugging log
-        print(f"Raw API Response: {response_json}")
-
-        # Handle errors in API response
-        if "error" in response_json:
-            error_message = response_json["error"].get("message", "Unknown API error.")
-            raise HTTPException(status_code=500, detail=f"API Error: {error_message}")
-
-        # Extract and return generated text safely
-        if "candidates" in response_json and response_json["candidates"]:
-            parts = response_json["candidates"][0].get("content", {}).get("parts", [])
-            if parts:
-                return parts[0].get("text", "No valid response found.")
-        
-        return "No valid response from API."
-    
-    except requests.exceptions.RequestException as req_err:
-        print(f"Request Error: {str(req_err)}")
-        raise HTTPException(status_code=500, detail=f"API Request Error: {str(req_err)}")
-    
-    except Exception as e:
-        print(f"Unexpected Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
-
-@app.post("/query")
-def query(request: QueryRequest):
-    try:
-        print(f"Processing query: {request.question}")  # Debugging log
-        response = process_query(request.question)
-        print(f"Response from LLM: {response}")  # Debugging log
-        return {"answer": response}
-    except HTTPException as http_err:
-        print(f"HTTP Error: {str(http_err)}")
-        raise http_err  # Raise HTTP exception with correct status code
-    except Exception as e:
-        print(f"Unexpected Server Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+if st.button("Ask"): 
+    if question:
+        response = requests.post("https://titanic-dataset-chat-agent-2ad3.onrender.com/query", json={"question": question})
+        if response.status_code == 200:
+            answer = response.json()["answer"]
+            st.write("**Answer:**", answer)
+            
+            # Example: Show histogram if user asks for age distribution
+            if "histogram of passenger ages" in question.lower():
+                plt.figure(figsize=(8,5))
+                plt.hist(df['Age'].dropna(), bins=20, edgecolor='black')
+                plt.xlabel("Age")
+                plt.ylabel("Number of Passengers")
+                plt.title("Age Distribution of Titanic Passengers")
+                st.pyplot(plt)
+            
+            # Show bar chart for embarked passengers
+            elif "how many passengers embarked from each port" in question.lower():
+                plt.figure(figsize=(8,5))
+                sns.countplot(x=df['Embarked'], palette='viridis')
+                plt.xlabel("Port of Embarkation")
+                plt.ylabel("Passenger Count")
+                plt.title("Number of Passengers by Embarkation Port")
+                st.pyplot(plt)
+            
+            # Show pie chart for gender distribution
+            elif "percentage of passengers were male" in question.lower():
+                gender_counts = df['Sex'].value_counts()
+                plt.figure(figsize=(6,6))
+                plt.pie(gender_counts, labels=gender_counts.index, autopct='%1.1f%%', colors=['lightblue', 'pink'])
+                plt.title("Male vs Female Passenger Distribution")
+                st.pyplot(plt)
+            
+            # Show boxplot for fare distribution
+            elif "average ticket fare" in question.lower():
+                plt.figure(figsize=(8,5))
+                sns.boxplot(x=df['Fare'], color='blue')
+                plt.xlabel("Ticket Fare")
+                plt.title("Distribution of Ticket Fares")
+                st.pyplot(plt)
+        else:
+            st.write("Error fetching response from backend.")
