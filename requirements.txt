@@ -9,3 +9,4 @@ uvicorn
 langchain
 openai
 google-generativeai
+python-dotenv
