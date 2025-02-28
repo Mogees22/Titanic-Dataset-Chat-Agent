@@ -4,6 +4,9 @@ import pandas as pd
 from pydantic import BaseModel
 import os
 import requests
+import matplotlib.pyplot as plt
+import io
+import base64
 
 app = FastAPI()
 
@@ -32,57 +35,76 @@ def is_dataset_query(question):
     keywords = ["average ticket fare", "survival rate", "total passengers", "fare", "age", "class"]
     return any(keyword in question.lower() for keyword in keywords)
 
+def generate_age_histogram():
+    """Generates a histogram of passenger ages and returns it as a base64 string."""
+    plt.figure(figsize=(8, 5))
+    df["Age"].dropna().hist(bins=20, edgecolor="black")
+    plt.xlabel("Age")
+    plt.ylabel("Count")
+    plt.title("Histogram of Passenger Ages")
+
+    # Save the figure to a buffer
+    img_buffer = io.BytesIO()
+    plt.savefig(img_buffer, format="png")
+    plt.close()
+
+    # Encode image to base64
+    img_buffer.seek(0)
+    img_base64 = base64.b64encode(img_buffer.read()).decode("utf-8")
+    return img_base64
+
 def process_query(question):
     try:
+        question_lower = question.lower()
+
         # Handle dataset-related questions
-        if is_dataset_query(question):
-            question_lower = question.lower()
-            
-            if "average ticket fare" in question_lower:
-                avg_fare = df["Fare"].mean()
-                return f"The average ticket fare was ${avg_fare:.2f}."
-            
-            elif "survival rate" in question_lower:
-                survival_rate = df["Survived"].mean() * 100
-                return f"The survival rate was {survival_rate:.2f}%."
-            
-            elif "total passengers" in question_lower:
-                total_passengers = len(df)
-                return f"The total number of passengers was {total_passengers}."
-            
-            elif "percentage of passengers were male" in question_lower or "male percentage" in question_lower:
-                male_count = df[df["Sex"] == "male"].shape[0]
-                total_count = df.shape[0]
-                male_percentage = (male_count / total_count) * 100
-                return f"The percentage of male passengers on the Titanic was {male_percentage:.2f}%."
-            
-            else:
-                return "I couldn't find relevant data in the dataset."
+        if "average ticket fare" in question_lower:
+            avg_fare = df["Fare"].mean()
+            return f"The average ticket fare was ${avg_fare:.2f}."
 
-        # Otherwise, use Gemini for general questions
-        url = f"https://generativelanguage.googleapis.com/v1/models/{model_name}:generateContent"
-        headers = {"Content-Type": "application/json"}
-        params = {"key": api_key}
-        data = {"contents": [{"parts": [{"text": question}]}]}  
+        elif "survival rate" in question_lower:
+            survival_rate = df["Survived"].mean() * 100
+            return f"The survival rate was {survival_rate:.2f}%."
 
-        response = requests.post(url, headers=headers, params=params, json=data)
-        response_json = response.json()
+        elif "total passengers" in question_lower:
+            total_passengers = len(df)
+            return f"The total number of passengers was {total_passengers}."
 
-        # Debugging log
-        print(f"Raw API Response: {response_json}")
+        elif "percentage of passengers were male" in question_lower or "male percentage" in question_lower:
+            male_count = df[df["Sex"] == "male"].shape[0]
+            total_count = df.shape[0]
+            male_percentage = (male_count / total_count) * 100
+            return f"The percentage of male passengers on the Titanic was {male_percentage:.2f}%."
 
-        # Handle API errors
-        if "error" in response_json:
-            error_message = response_json["error"].get("message", "Unknown API error.")
-            raise HTTPException(status_code=500, detail=f"API Error: {error_message}")
+        elif "histogram of passenger ages" in question_lower:
+            image_base64 = generate_age_histogram()
+            return {"image": image_base64}
 
-        # Extract generated text
-        if "candidates" in response_json and response_json["candidates"]:
-            parts = response_json["candidates"][0].get("content", {}).get("parts", [])
-            if parts:
-                return parts[0].get("text", "No valid response found.")
+        else:
+            # If no dataset-related match, send to Gemini API
+            url = f"https://generativelanguage.googleapis.com/v1/models/{model_name}:generateContent"
+            headers = {"Content-Type": "application/json"}
+            params = {"key": api_key}
+            data = {"contents": [{"parts": [{"text": question}]}]}  
 
-        return "No valid response from API."
+            response = requests.post(url, headers=headers, params=params, json=data)
+            response_json = response.json()
+
+            # Debugging log
+            print(f"Raw API Response: {response_json}")
+
+            # Handle API errors
+            if "error" in response_json:
+                error_message = response_json["error"].get("message", "Unknown API error.")
+                raise HTTPException(status_code=500, detail=f"API Error: {error_message}")
+
+            # Extract generated text
+            if "candidates" in response_json and response_json["candidates"]:
+                parts = response_json["candidates"][0].get("content", {}).get("parts", [])
+                if parts:
+                    return parts[0].get("text", "No valid response found.")
+
+            return "No valid response from API."
     
     except requests.exceptions.RequestException as req_err:
         print(f"Request Error: {str(req_err)}")
@@ -91,7 +113,6 @@ def process_query(question):
     except Exception as e:
         print(f"Unexpected Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
-
 
 @app.post("/query")
 def query(request: QueryRequest):
