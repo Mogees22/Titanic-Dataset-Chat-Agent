@@ -8,18 +8,24 @@ import base64
 from pydantic import BaseModel
 import os
 import requests
+import streamlit as st
+from dotenv import load_dotenv
 
 app = FastAPI()
 
 # Load the Titanic dataset
 df = pd.read_csv("titanic.csv")
 
-# Retrieve API key from environment variable
-print("API Key:", os.getenv("GOOGLE_GEMINI_API_KEY"))
-api_key = os.getenv("GOOGLE_GEMINI_API_KEY")
+# Load environment variables
+load_dotenv()
+
+# Retrieve API key from Streamlit secrets or fallback to environment variable
+api_key = st.secrets.get("GOOGLE_GEMINI_API_KEY", os.getenv("GOOGLE_GEMINI_API_KEY"))
 
 if not api_key:
-    raise ValueError("Google Gemini API key is missing. Set it as an environment variable.")
+    st.error("Google Gemini API key is missing. Please set it in Streamlit Secrets or environment variables.")
+else:
+    st.success("API Key Loaded Successfully!")
 
 # Configure Gemini model with a correct model name
 try:
