@@ -38,22 +38,32 @@ def process_query(question):
         if is_dataset_query(question):
             question_lower = question.lower()
             
-            if "average ticket fare" in question.lower():
+            if "average ticket fare" in question_lower:
                 avg_fare = df["Fare"].mean()
                 return f"The average ticket fare was ${avg_fare:.2f}."
-            elif "survival rate" in question.lower():
+            
+            elif "survival rate" in question_lower:
                 survival_rate = df["Survived"].mean() * 100
                 return f"The survival rate was {survival_rate:.2f}%."
-            elif "total passengers" in question.lower():
+            
+            elif "total passengers" in question_lower:
                 total_passengers = len(df)
                 return f"The total number of passengers was {total_passengers}."
+            
+            elif "percentage of passengers were male" in question_lower or "male percentage" in question_lower:
+                male_count = df[df["Sex"] == "male"].shape[0]
+                total_count = df.shape[0]
+                male_percentage = (male_count / total_count) * 100
+                return f"The percentage of male passengers on the Titanic was {male_percentage:.2f}%."
+            
             else:
                 return "I couldn't find relevant data in the dataset."
+
         # Otherwise, use Gemini for general questions
         url = f"https://generativelanguage.googleapis.com/v1/models/{model_name}:generateContent"
         headers = {"Content-Type": "application/json"}
         params = {"key": api_key}
-        data = {"contents": [{"parts": [{"text": question}]}]}
+        data = {"contents": [{"parts": [{"text": question}]}]}  
 
         response = requests.post(url, headers=headers, params=params, json=data)
         response_json = response.json()
@@ -61,17 +71,17 @@ def process_query(question):
         # Debugging log
         print(f"Raw API Response: {response_json}")
 
-        # Handle errors in API response
+        # Handle API errors
         if "error" in response_json:
             error_message = response_json["error"].get("message", "Unknown API error.")
             raise HTTPException(status_code=500, detail=f"API Error: {error_message}")
 
-        # Extract and return generated text safely
+        # Extract generated text
         if "candidates" in response_json and response_json["candidates"]:
             parts = response_json["candidates"][0].get("content", {}).get("parts", [])
             if parts:
                 return parts[0].get("text", "No valid response found.")
-        
+
         return "No valid response from API."
     
     except requests.exceptions.RequestException as req_err:
